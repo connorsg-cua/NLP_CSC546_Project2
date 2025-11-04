@@ -1,0 +1,2 @@
+{'Network': 68, 'Software': 231, 'Account': 71, 'Training': 12, 'Security': 42, 'Licensing': 2, 'Communication': 24, 'RemoteWork': 20, 'Hardware': 22, 'Infrastructure': 7, 'Performance': 1}
+{'Network': 0.136, 'Software': 0.462, 'Account': 0.142, 'Training': 0.024, 'Security': 0.084, 'Licensing': 0.004, 'Communication': 0.048, 'RemoteWork': 0.04, 'Hardware': 0.044, 'Infrastructure': 0.014, 'Performance': 0.002}
