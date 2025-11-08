@@ -50,4 +50,3 @@ This app analyzes work logs to help understand employee performance and skills u
 1. Upload your CSV file (use the synthetic data first)
 2. The app will automatically analyze everything
 3. Explore the different tabs to see insights
-4. No technical knowledge needed - it just works!
