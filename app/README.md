@@ -11,71 +11,53 @@
 The app will open in your browser at http://localhost:8501
 
 
-🚀 App Features Explained
-What This App Does:
+## 🚀 App Features Explained
+
+**What This App Does:**
 This app analyzes work logs to help understand employee performance and skills using real AI-powered analysis.
 
-Key Features:
-📊 Organizational Overview
-Dashboard view of key metrics
+**Key Features:**
 
-Skill distribution across the organization
+**📊 Organizational Overview**
+- Dashboard view of key metrics
+- Skill distribution across the organization
+- Completion rates and project statistics
 
-Completion rates and project statistics
+**🏆 Employee Leaderboard**
+- Ranks employees by performance score
+- Shows top performers with medals
+- Tracks project involvement and task completion
 
-🏆 Employee Leaderboard
-Ranks employees by performance score
+**🔧 Skills Dashboard**
+- AI-powered skill detection using Named Entity Recognition (NER)
+- Visual skill tags and employee skill matrix
+- Real-time skill analysis from task descriptions
 
-Shows top performers with medals
+**📊 Report Generator**
+- Generates individual employee reports
+- Shows completion rates and task counts
+- Highlights strengths and areas for improvement
+- Downloadable reports in text format
 
-Tracks project involvement and task completion
+**👥 Team Optimizer**
+- Checks if teams have the right skills
+- Finds missing skills in projects
+- Suggests team improvements and cross-training
 
-🔧 Skills Dashboard
-AI-powered skill detection using Named Entity Recognition (NER)
+**🤖 NER Analysis Tab (NEW!)**
+- See the AI in action with real-time entity detection
+- View raw NER output from Hugging Face models
+- Test different task descriptions to see what the AI detects
+- Understand how skills are automatically extracted
 
-Visual skill tags and employee skill matrix
+**🧠 How the AI Works:**
+- Uses Hugging Face NER Model (dslim/bert-base-NER)
+- Automatically extracts technologies, skills, and entities
+- Processes natural language in task descriptions
+- No manual keyword lists - learns from context!
 
-Real-time skill analysis from task descriptions
-
-📊 Report Generator
-Generates individual employee reports
-
-Shows completion rates and task counts
-
-Highlights strengths and areas for improvement
-
-Downloadable reports in text format
-
-👥 Team Optimizer
-Checks if teams have the right skills
-
-Finds missing skills in projects
-
-Suggests team improvements and cross-training
-
-🤖 NER Analysis Tab (NEW!)
-See the AI in action with real-time entity detection
-
-View raw NER output from Hugging Face models
-
-Test different task descriptions to see what the AI detects
-
-Understand how skills are automatically extracted
-
-🧠 How the AI Works:
-Uses Hugging Face NER Model (dslim/bert-base-NER)
-
-Automatically extracts technologies, skills, and entities
-
-Processes natural language in task descriptions
-
-No manual keyword lists - learns from context!
-
-How to Use:
-Upload your CSV file (use the synthetic data first)
-
-The AI will automatically analyze everything using NER
-
-Explore the different tabs to see insights
-
-Check the NER Analysis tab to see the AI in action
+**How to Use:**
+1. Upload your CSV file (use the synthetic data first)
+2. The AI will automatically analyze everything using NER
+3. Explore the different tabs to see insights
+4. Check the NER Analysis tab to see the AI in action
