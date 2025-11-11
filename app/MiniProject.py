@@ -156,7 +156,7 @@ if uploaded_file:
         """, unsafe_allow_html=True)
 
     with st.spinner("🔄 Processing data and generating AI insights..."):
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "🏆 Leaderboard", "🔧 Skills", "📊 Reports", "👥 Team", "🤖 NER Analysis"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "🏆 Leaderboard", "🔧 Skills", "📊 Reports", "👥 Team Optimizer", "🤖 NER Analysis"])
 
         with tab1:
             st.markdown('<div class="feature-card"><h3>📊 Organizational Overview</h3></div>', unsafe_allow_html=True)
