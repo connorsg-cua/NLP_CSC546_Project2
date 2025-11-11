@@ -69,8 +69,10 @@ if uploaded_file:
     @st.cache_resource
     def load_ner_model():
         return pipeline("ner", 
-                       model="dslim/bert-base-NER", 
-                       aggregation_strategy="simple")
+            model="dslim/bert-base-NER", 
+            tokenizer="dslim/bert-base-NER",
+            aggregation_strategy="simple")
+
     
     def extract_skills_with_ner(text):
         """
@@ -130,7 +132,15 @@ if uploaded_file:
         score += volume_score
         
         return round(score, 1)
+    
+    # summarization task
+    def summarize_employee(emp_data):
+        pipe = pipeline("summarization", model="facebook/bart-large-cnn")
+        merged_emp_data = " ".join(emp_data['Description'].tolist())
 
+        summ = pipe(merged_emp_data, max_length=120, min_length=30, do_sample=False)[0]['summary_text']
+        return summ
+    
     leaderboard_data = []
     for employee in df['Employee'].unique():
         emp_data = df[df['Employee'] == employee]
@@ -257,20 +267,21 @@ if uploaded_file:
         with tab4:
             st.markdown('<div class="feature-card"><h3>📊 Report Generator</h3></div>', unsafe_allow_html=True)
             
-            col1, col2 = st.columns(2)
+            col1, = st.columns(1)
             
             with col1:
                 selected_employee_report = st.selectbox("Select Employee for Report", df['Employee'].unique())
-            
-            with col2:
-                report_type = st.selectbox("Report Type", ["Performance Summary", "Skills Analysis", "Full Evaluation"])
-            
+
             if st.button("📄 Generate Report", type="primary"):
+
                 emp_data = df[df['Employee'] == selected_employee_report]
                 skills_data = skill_matrix[selected_employee_report]
                 
                 st.subheader(f"📋 Employee Report: {selected_employee_report}")
-                
+
+                st.text(f"{summarize_employee(emp_data)}")
+                st.text("")
+
                 # Performance Metrics
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -314,6 +325,7 @@ if uploaded_file:
 
                 # Generate report content for download
                 completion_rate_for_report = (emp_data['Status'] == 'Done').mean() * 100
+                skills_list = '\n  - '.join([skill.capitalize() for skill in skills_data['skills']]) if skills_data['skills'] else 'No specific skills detected by AI'
                 report_content = f"""
 Employee Report: {selected_employee_report}
 
@@ -324,7 +336,7 @@ Performance Summary:
   Projects Involved: {emp_data['Project'].nunique()}
 
 AI-Detected Skills:
-{'  - ' + '\\n  - '.join([skill.capitalize() for skill in skills_data['skills']]) if skills_data['skills'] else '  No specific skills detected by AI'}
+- {skills_list}
 
 Performance Insights:
   Completion Rate: {completion_rate_for_report:.1f}%
@@ -334,6 +346,7 @@ Performance Insights:
 Recent Tasks (Top 10):
 {emp_data[['TicketID', 'Project', 'TaskCategory', 'Description', 'Status']].head(10).to_string()}
                 """
+
                 st.download_button(
                     label="💾 Download Report",
                     data=report_content,
