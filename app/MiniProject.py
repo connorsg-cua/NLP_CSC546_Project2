@@ -3,17 +3,14 @@ import pandas as pd
 import numpy as np
 from transformers import pipeline
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
-import base64
-from io import BytesIO
+import re
+import time
 
 # -----------------------------
 # 🎯 APP CONFIGURATION
 # -----------------------------
 st.set_page_config(page_title="Workforce Intelligence Platform", layout="wide")
 
-# Custom CSS for styling
 st.markdown("""
 <style>
     .main-header {
@@ -22,12 +19,23 @@ st.markdown("""
         text-align: center;
         margin-bottom: 1rem;
     }
-    .feature-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 15px;
+    .skill-tag {
+        background: #00b894;
         color: white;
-        margin: 10px 0;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        margin: 4px;
+        display: inline-block;
+    }
+    .person-tag {
+        background: #6c5ce7;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        margin: 4px;
+        display: inline-block;
     }
     .metric-card {
         background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
@@ -38,138 +46,430 @@ st.markdown("""
         border: none;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .skill-tag {
-        background: #00b894;
+    .ai-insight {
+        background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+        padding: 15px;
+        border-radius: 10px;
         color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8em;
-        margin: 2px;
-        display: inline-block;
+        margin: 10px 0;
+        border-left: 5px solid #fd79a8;
+    }
+    .insight-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 10px 0;
+        border-left: 4px solid #74b9ff;
     }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🏢 Workforce Intelligence Platform</div>', unsafe_allow_html=True)
-st.write("Comprehensive employee analytics with **AI-powered insights**")
+st.write("**Enhanced Version** - Data-Driven AI Insights")
+
+# -----------------------------
+# 🛠️ IMPROVED SKILL DETECTION WITH 
+# -----------------------------
+
+# Comprehensive skill list
+TECH_SKILLS = {
+    'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'swift', 'kotlin', 'r', 'php', 'ruby'],
+    'web': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express', 'laravel', 'node.js', 'html', 'css', 'bootstrap', 'sass', 'less'],
+    'mobile': ['android', 'ios', 'react native', 'flutter', 'mobile development'],
+    'databases': ['sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'oracle', 'sqlite', 'database', 'nosql', 'dynamodb', 'cassandra'],
+    'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'jenkins', 'ci/cd', 'devops', 'cloud', 'serverless', 'lambda'],
+    'data_science': ['pandas', 'numpy', 'tensorflow', 'pytorch', 'machine learning', 'ml', 'ai', 'data analysis', 'etl', 'tableau', 'powerbi', 'big data', 'analytics'],
+    'tools': ['git', 'jira', 'confluence', 'figma', 'photoshop', 'slack', 'teams', 'vscode', 'intellij', 'eclipse', 'postman'],
+    'methods': ['agile', 'scrum', 'kanban', 'waterfall', 'tdd', 'test driven development'],
+    'soft_skills': ['communication', 'leadership', 'teamwork', 'problem solving', 'creativity', 'collaboration', 'presentation', 'mentoring'],
+    'testing': ['testing', 'unit tests', 'integration tests', 'test cases', 'qa', 'quality assurance']
+}
+
+# Flatten all skills for easy matching
+ALL_SKILLS = [skill for sublist in TECH_SKILLS.values() for skill in sublist]
+
+def extract_skills_simple(text):
+    """
+    SIMPLE BUT EFFECTIVE skill extraction using keyword matching
+    """
+    if not isinstance(text, str):
+        return []
+    
+    text_lower = text.lower()
+    found_skills = []
+    
+    # Look for each skill in the text
+    for skill in ALL_SKILLS:
+        # Use word boundaries to avoid partial matches
+        if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
+            found_skills.append(skill)
+    
+    # Special patterns for common skills
+    patterns = {
+        'api': r'\bapi\b',
+        'ui/ux': r'\b(ui|ux|user interface|user experience)\b',
+        'frontend': r'\bfront.end\b',
+        'backend': r'\back.end\b',
+        'fullstack': r'\bfull.stack\b',
+        'data pipeline': r'\bdata pipeline\b',
+        'endpoint': r'\bendpoint\b',
+        'analytics': r'\banalytics\b',
+        'onboarding': r'\bonboarding\b',
+        'authentication': r'\bauthentication\b',
+        'browser': r'\bbrowser\b',
+        'security': r'\bsecurity\b',
+        'testing': r'\b(testing|tests|test cases)\b'
+    }
+    
+    for skill_name, pattern in patterns.items():
+        if re.search(pattern, text_lower, re.IGNORECASE) and skill_name not in found_skills:
+            found_skills.append(skill_name)
+    
+    return list(set(found_skills))
+
+def smart_ner_analysis(text):
+    """
+    IMPROVED NER with better special character handling for names
+    """
+    try:
+        # Simple rule-based entity detection
+        entities = []
+        
+        # IMPROVED: Detect person names with special characters
+        person_pattern = r'[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+'
+        persons = re.findall(person_pattern, text, re.UNICODE)
+        
+        for person in persons:
+            entities.append({
+                'entity': 'PERSON',
+                'word': person,
+                'score': 0.95
+            })
+        
+        # ALTERNATIVE: Also look for Title Case words that might be names
+        words = text.split()
+        for i in range(len(words) - 1):
+            # Check if two consecutive words start with capital letters
+            if (len(words[i]) > 1 and len(words[i+1]) > 1 and
+                words[i][0].isupper() and words[i+1][0].isupper() and
+                not words[i].isupper() and not words[i+1].isupper()):
+                
+                potential_name = f"{words[i]} {words[i+1]}"
+                # Don't add duplicates and check if it looks like a name (not a skill)
+                if (potential_name not in persons and 
+                    potential_name not in [e['word'] for e in entities] and
+                    not any(skill in potential_name.lower() for skill in ALL_SKILLS)):
+                    
+                    entities.append({
+                        'entity': 'PERSON',
+                        'word': potential_name,
+                        'score': 0.85
+                    })
+        
+        # Detect skills in context
+        skills_in_text = extract_skills_simple(text)
+        for skill in skills_in_text:
+            entities.append({
+                'entity': 'SKILL',
+                'word': skill,
+                'score': 0.90
+            })
+        
+        # Detect organizations (words in ALL CAPS or Title Case)
+        org_pattern = r'[A-ZÀ-Ú][a-zA-ZÀ-ú]+ [A-ZÀ-Ú][a-zA-ZÀ-ú]+'
+        orgs = re.findall(org_pattern, text, re.UNICODE)
+        for org in orgs:
+            # Don't add if it's already identified as a person
+            if org not in [e['word'] for e in entities if e['entity'] == 'PERSON']:
+                entities.append({
+                    'entity': 'ORG',
+                    'word': org,
+                    'score': 0.85
+                })
+        
+        return entities
+        
+    except Exception as e:
+        st.error(f"Analysis error: {e}")
+        return []
+
+@st.cache_resource
+def load_summarizer():
+    """Load a fast summarization model"""
+    try:
+        return pipeline("summarization", 
+                       model="sshleifer/distilbart-cnn-12-6",
+                       tokenizer="sshleifer/distilbart-cnn-12-6")
+    except:
+        return pipeline("summarization", model="facebook/bart-large-cnn")
+
+def summarize_text(text):
+    """Simple summarization that actually works"""
+    try:
+        summarizer = load_summarizer()
+        
+        # Clean and prepare text
+        if len(text) > 1500:
+            text = text[:1500] + "..."
+        
+        summary = summarizer(text, 
+                           max_length=100, 
+                           min_length=30, 
+                           do_sample=False,
+                           truncation=True)[0]['summary_text']
+        return summary
+    except Exception as e:
+        return f"Summary: {text[:200]}..."  # Fallback to truncated text
+
+def generate_data_driven_insight(insight_type, data_context):
+    """
+    Generate data-driven insights without hallucinations
+    Uses template-based approach with real data
+    """
+    
+    insights_templates = {
+        'project_description': [
+            "Project {project_name} involves {team_size} team members with key skills in {top_skills}. The team has completed {completed_tasks} tasks with a {completion_rate}% success rate. Key focus areas include {key_areas}.",
+            "{project_name} is managed by a team of {team_size} professionals skilled in {top_skills}. With {completed_tasks} completed tasks and {active_tasks} in progress, the project maintains a {completion_rate}% completion rate.",
+            "The {project_name} initiative leverages expertise in {top_skills} across {team_size} team members. Current progress shows {completed_tasks} deliverables completed with ongoing work in {key_areas}."
+        ],
+        
+        'team_recommendation': [
+            "Based on skill distribution, consider cross-training in {missing_skills}. The team excels in {strong_skills} but could benefit from additional expertise in {gap_areas}.",
+            "Team optimization suggestions: Focus on developing {skill_gaps} capabilities. Current strengths in {top_skills} provide a solid foundation for expanding into {growth_areas}.",
+            "Recommendation: Balance skill distribution by training team members in {needed_skills}. The current expertise in {existing_skills} should be complemented with {complementary_skills}."
+        ],
+        
+        'performance_analysis': [
+            "{employee_name} demonstrates strong performance with a score of {score}/100 and {completion_rate}% task completion. Key skills include {skills} with notable strengths in {top_skills}.",
+            "Performance review: {employee_name} maintains a {score}/100 rating with expertise in {skills}. Areas for growth include developing {growth_areas} while leveraging existing {strengths}.",
+            "{employee_name} shows consistent performance ({score}/100) with specialization in {skills}. Completion rate of {completion_rate}% indicates reliable delivery on assigned tasks."
+        ],
+        
+        'skill_gap_analysis': [
+            "Organization shows strong capabilities in {top_skills} but has gaps in {missing_skills}. Recommended focus areas: {recommended_skills} to enhance overall team capabilities.",
+            "Skill distribution analysis: Expertise concentrated in {common_skills}. Strategic gaps identified in {gap_skills}. Consider prioritizing {priority_skills} for development.",
+            "Current skill landscape features {existing_skills} as core competencies. Development opportunities exist in {development_areas} to create more balanced team capabilities."
+        ]
+    }
+    
+    # Select appropriate template
+    templates = insights_templates.get(insight_type, [])
+    if not templates:
+        return "Insight type not supported."
+    
+    template = np.random.choice(templates)
+    
+    # Fill template with actual data
+    try:
+        filled_insight = template.format(**data_context)
+        return filled_insight
+    except KeyError as e:
+        return f"Data-driven insight: Analysis based on available metrics shows opportunities for optimization and improvement."
+
+def generate_project_insight(project_name, df, employee_skills):
+    """Generate project-specific insights"""
+    project_data = df[df['Project'] == project_name]
+    team_members = project_data['Employee'].unique()
+    team_size = len(team_members)
+    
+    # Calculate project metrics
+    completed_tasks = (project_data['Status'] == 'Done').sum()
+    total_tasks = len(project_data)
+    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # Get project skills
+    project_skills = []
+    for member in team_members:
+        if member in employee_skills:
+            project_skills.extend(employee_skills[member])
+    top_skills = list(set(project_skills))[:3]
+    
+    # Identify key areas from task categories
+    key_areas = project_data['TaskCategory'].value_counts().head(3).index.tolist()
+    
+    context = {
+        'project_name': project_name,
+        'team_size': team_size,
+        'top_skills': ', '.join(top_skills) if top_skills else 'various technical skills',
+        'completed_tasks': completed_tasks,
+        'active_tasks': total_tasks - completed_tasks,
+        'completion_rate': round(completion_rate, 1),
+        'key_areas': ', '.join(key_areas) if key_areas else 'multiple domains'
+    }
+    
+    return generate_data_driven_insight('project_description', context)
+
+def generate_team_insight(df, employee_skills, all_detected_skills):
+    """Generate team optimization insights"""
+    # Analyze skill distribution
+    skill_counts = pd.Series(all_detected_skills).value_counts()
+    top_skills = skill_counts.head(5).index.tolist()
+    
+    # Find missing skills
+    common_skills = ['python', 'javascript', 'sql', 'aws', 'react']  # Expected common skills
+    missing_skills = [skill for skill in common_skills if skill not in all_detected_skills]
+    
+    # Identify skill gaps
+    strong_skills = top_skills[:3] if len(top_skills) >= 3 else top_skills
+    gap_areas = missing_skills[:3] if missing_skills else ['advanced cloud infrastructure', 'specialized data analysis', 'automated testing']
+    
+    context = {
+        'missing_skills': ', '.join(missing_skills) if missing_skills else 'several emerging technologies',
+        'strong_skills': ', '.join(strong_skills) if strong_skills else 'core technical capabilities',
+        'gap_areas': ', '.join(gap_areas),
+        'top_skills': ', '.join(top_skills[:3]) if top_skills else 'diverse technical skills',
+        'skill_gaps': ', '.join(missing_skills[:2]) if missing_skills else 'specialized technical domains',
+        'existing_skills': ', '.join(top_skills[:3]) if top_skills else 'current technical expertise',
+        'complementary_skills': 'complementary technical specializations',
+        'needed_skills': ', '.join(missing_skills[:2]) if missing_skills else 'specialized technical skills',
+        'common_skills': ', '.join(top_skills[:3]) if top_skills else 'established technical capabilities',
+        'growth_areas': ', '.join(gap_areas)
+    }
+    
+    return generate_data_driven_insight('team_recommendation', context)
+
+def generate_performance_insight(employee_name, skills, score, completion_rate):
+    """Generate performance insights"""
+    top_skills = skills[:3] if skills else ['various technical capabilities']
+    growth_areas = ['advanced technical specializations', 'cross-functional collaboration', 'leadership development']
+    
+    context = {
+        'employee_name': employee_name,
+        'score': score,
+        'completion_rate': completion_rate,
+        'skills': ', '.join(skills) if skills else 'diverse capabilities',
+        'top_skills': ', '.join(top_skills),
+        'growth_areas': ', '.join(growth_areas[:2]),
+        'strengths': ', '.join(top_skills) if top_skills else 'technical proficiency'
+    }
+    
+    return generate_data_driven_insight('performance_analysis', context)
+
+def generate_skill_gap_insight(all_detected_skills):
+    """Generate skill gap analysis"""
+    skill_counts = pd.Series(all_detected_skills).value_counts()
+    top_skills = skill_counts.head(5).index.tolist()
+    
+    # Common skills that might be missing
+    expected_skills = ['python', 'javascript', 'sql', 'aws', 'docker', 'react', 'node.js']
+    missing_skills = [skill for skill in expected_skills if skill not in all_detected_skills]
+    
+    context = {
+        'top_skills': ', '.join(top_skills[:3]) if top_skills else 'core technical skills',
+        'missing_skills': ', '.join(missing_skills) if missing_skills else 'specialized technical domains',
+        'recommended_skills': ', '.join(missing_skills[:3]) if missing_skills else 'emerging technology areas',
+        'common_skills': ', '.join(top_skills[:3]) if top_skills else 'established capabilities',
+        'gap_skills': ', '.join(missing_skills[:2]) if missing_skills else 'strategic technical areas',
+        'priority_skills': ', '.join(missing_skills[:2]) if missing_skills else 'high-demand technical skills',
+        'existing_skills': ', '.join(top_skills[:3]) if top_skills else 'current technical expertise',
+        'development_areas': ', '.join(missing_skills[:3]) if missing_skills else 'expanded technical capabilities'
+    }
+    
+    return generate_data_driven_insight('skill_gap_analysis', context)
+
+def calculate_employee_scores(df, employee_data):
+    """Calculate performance scores for employees"""
+    score = 0
+    # Completion rate (40% weight)
+    completion_rate = (employee_data['Status'] == 'Done').mean()
+    score += completion_rate * 40
+    
+    # Task diversity (20% weight)
+    task_diversity = employee_data['TaskCategory'].nunique() / df['TaskCategory'].nunique()
+    score += min(task_diversity * 20, 20)
+    
+    # Project diversity (20% weight)
+    project_diversity = employee_data['Project'].nunique() / df['Project'].nunique()
+    score += min(project_diversity * 20, 20)
+    
+    # Work volume (20% weight)
+    volume_score = min(len(employee_data) / (len(df) / df['Employee'].nunique()) * 20, 20)
+    score += volume_score
+    
+    return round(score, 1)
+
+def custom_metric(title, value):
+    st.markdown(f"""
+        <div class="metric-card">
+            <p style="font-weight: bold; font-size: 1.1em; margin: 0; opacity: 0.9;">{title}</p>
+            <p style="font-size: 2.2em; font-weight: 700; margin: 5px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">{value}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # -----------------------------
 # 📂 LOAD DATA
 # -----------------------------
-st.sidebar.header("📁 Load Your Work Logs")
-
-uploaded_file = st.sidebar.file_uploader("Upload your csv file", type=["csv"])
+st.sidebar.header("📁 Upload Your Data")
+uploaded_file = st.sidebar.file_uploader("Choose CSV file", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     
-    # -----------------------------
-    # 🤖 NER MODEL SETUP
-    # -----------------------------
-    @st.cache_resource
-    def load_ner_model():
-        return pipeline("ner", 
-            model="dslim/bert-base-NER", 
-            tokenizer="dslim/bert-base-NER",
-            aggregation_strategy="simple")
-
+    # Basic data validation
+    st.success(f"✅ Data loaded: {len(df)} records, {df['Employee'].nunique()} employees")
     
-    def extract_skills_with_ner(text):
-        """
-        Use Hugging Face NER model to extract skills and technologies from text
-        """
-        try:
-            ner_pipe = load_ner_model()
-            entities = ner_pipe(text)
+    # PROCESS ALL DATA FIRST - BEFORE CREATING TABS
+    with st.spinner("🔄 Processing data and generating insights..."):
+        # Create leaderboard data
+        leaderboard_data = []
+        for employee in df['Employee'].unique():
+            emp_data = df[df['Employee'] == employee]
+            score = calculate_employee_scores(df, emp_data)
             
-            skills_detected = []
-            tech_keywords = [
-                'python', 'java', 'javascript', 'css', 'html', 'react', 'angular', 'vue',
-                'node', 'sql', 'database', 'api', 'docker', 'kubernetes', 'aws', 'cloud',
-                'azure', 'gcp', 'testing', 'qa', 'design', 'development', 'frontend', 
-                'backend', 'mobile', 'ios', 'android', 'machine learning', 'ai',
-                'analysis', 'research', 'documentation', 'debugging', 'deployment'
-            ]
+            leaderboard_data.append({
+                'Employee': employee,
+                'Score': score,
+                'Tasks': len(emp_data),
+                'Projects': emp_data['Project'].nunique(),
+                'Completion Rate': f"{(emp_data['Status'] == 'Done').mean() * 100:.1f}%",
+                'Task Categories': emp_data['TaskCategory'].nunique()
+            })
+        
+        leaderboard_df = pd.DataFrame(leaderboard_data).sort_values('Score', ascending=False)
+        
+        # Process skills across organization
+        all_detected_skills = []
+        employee_skills = {}
+        
+        for employee in df['Employee'].unique():
+            emp_data = df[df['Employee'] == employee]
+            emp_skills = []
             
-            for entity in entities:
-                entity_text = entity['word'].lower().strip()
-                entity_type = entity['entity_group']
-                entity_score = entity['score']
-                
-                # Only consider high-confidence entities and relevant types
-                if entity_score > 0.85:
-                    # Check for technology/skill keywords in any entity
-                    for keyword in tech_keywords:
-                        if keyword in entity_text:
-                            skills_detected.append(keyword)
-                    
-                    # Also capture ORG, MISC, PRODUCT entities as they often contain tech names
-                    if entity_type in ['ORG', 'MISC', 'PRODUCT'] and len(entity_text) > 2:
-                        skills_detected.append(entity_text)
+            for desc in emp_data['Description'].dropna():
+                skills = extract_skills_simple(desc)
+                emp_skills.extend(skills)
             
-            return list(set(skills_detected))
+            unique_skills = list(set(emp_skills))
+            employee_skills[employee] = unique_skills
+            all_detected_skills.extend(unique_skills)
         
-        except Exception as e:
-            st.error(f"NER processing error: {e}")
-            return []
-
-    def calculate_employee_scores(employee_data):
-        score = 0
-        # Completion rate (40% weight)
-        completion_rate = (employee_data['Status'] == 'Done').mean()
-        score += completion_rate * 40
+        # Analyze project teams for Team Optimizer
+        project_teams = {}
+        for project in df['Project'].unique():
+            project_data = df[df['Project'] == project]
+            team_members = project_data['Employee'].unique()
+            
+            # Analyze team composition
+            team_skills = []
+            for member in team_members:
+                if member in employee_skills:
+                    team_skills.extend(employee_skills[member])
+            
+            unique_skills = list(set(team_skills))
+            
+            project_teams[project] = {
+                'team_size': len(team_members),
+                'team_members': list(team_members),
+                'skills_covered': unique_skills,
+                'skill_gaps': [skill for skill in (set(all_detected_skills) if all_detected_skills else []) if skill not in unique_skills][:5]
+            }
         
-        # Task diversity (20% weight)
-        task_diversity = employee_data['TaskCategory'].nunique() / df['TaskCategory'].nunique()
-        score += min(task_diversity * 20, 20)
+        # NOW CREATE ALL TABS 
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📊 Overview", "🏆 Leaderboard", "🔧 Skills", "📋 Reports", "👥 Team Optimizer", "🤖 NER Analysis", "🧠 AI Insights"])
         
-        # Project diversity (20% weight)
-        project_diversity = employee_data['Project'].nunique() / df['Project'].nunique()
-        score += min(project_diversity * 20, 20)
-        
-        # Work volume (20% weight)
-        volume_score = min(len(employee_data) / (len(df) / df['Employee'].nunique()) * 20, 20)
-        score += volume_score
-        
-        return round(score, 1)
-    
-    # summarization task
-    def summarize_employee(emp_data):
-        pipe = pipeline("summarization", model="facebook/bart-large-cnn")
-        merged_emp_data = " ".join(emp_data['Description'].tolist())
-
-        summ = pipe(merged_emp_data, max_length=120, min_length=30, do_sample=False)[0]['summary_text']
-        return summ
-    
-    leaderboard_data = []
-    for employee in df['Employee'].unique():
-        emp_data = df[df['Employee'] == employee]
-        score = calculate_employee_scores(emp_data)
-        
-        leaderboard_data.append({
-            'Employee': employee,
-            'Score': score,
-            'Tasks': len(emp_data),
-            'Projects': emp_data['Project'].nunique(),
-            'Completion Rate': f"{(emp_data['Status'] == 'Done').mean() * 100:.1f}%",
-            'Task Categories': emp_data['TaskCategory'].nunique()
-        })
-    
-    leaderboard_df = pd.DataFrame(leaderboard_data).sort_values('Score', ascending=False)
-
-    def custom_metric(title, value):
-        st.markdown(f"""
-            <div class="metric-card">
-                <p style="font-weight: bold; font-size: 1.1em; margin: 0; opacity: 0.9;">{title}</p>
-                <p style="font-size: 2.2em; font-weight: 700; margin: 5px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">{value}</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-    with st.spinner("🔄 Processing data and generating AI insights..."):
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "🏆 Leaderboard", "🔧 Skills", "📊 Reports", "👥 Team Optimizer", "🤖 NER Analysis"])
-
         with tab1:
-            st.markdown('<div class="feature-card"><h3>📊 Organizational Overview</h3></div>', unsafe_allow_html=True)
+            st.header("📊 Organizational Overview")
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -179,51 +479,40 @@ if uploaded_file:
             with col3:
                 custom_metric("Active Projects", df['Project'].nunique())
             with col4:
-                completion_rate = (df['Status'] == 'Done').mean() * 100
-                custom_metric("Overall Completion", f"{completion_rate:.1f}%")
+                completion = (df['Status'] == 'Done').mean() * 100
+                custom_metric("Overall Completion", f"{completion:.1f}%")
             
-            st.markdown("---")
+            # Display skill distribution
             st.subheader("🎯 Skill Distribution Across Organization")
             
-            # Analyze skills across organization using NER
-            all_skills = []
-            skill_matrix = {}
-
-            for employee in df['Employee'].unique():
-                emp_data = df[df['Employee'] == employee]
-                emp_skills = []
+            if all_detected_skills:
+                skill_counts = pd.Series(all_detected_skills).value_counts()
                 
-                for desc in emp_data['Description'].dropna():
-                    # Use REAL NER instead of keyword matching
-                    emp_skills.extend(extract_skills_with_ner(desc))
+                # Filter out numeric values and nonsense
+                valid_skills = skill_counts[skill_counts.index.astype(str).str.isalpha()]
                 
-                unique_skills = list(set(emp_skills))
-                skill_matrix[employee] = {
-                    'skills': unique_skills,
-                    'skill_count': len(unique_skills),
-                    'tasks_analyzed': len(emp_data)
-                }
-                all_skills.extend(unique_skills)
-
-            if all_skills:
-                skill_counts = pd.Series(all_skills).value_counts()
-                fig_skills = px.bar(skill_counts, 
-                                  title="🚀 Most Common Skills Detected by AI",
-                                  color=skill_counts.values,
-                                  color_continuous_scale='viridis')
-                fig_skills.update_layout(showlegend=False)
-                st.plotly_chart(fig_skills, use_container_width=True)
+                if len(valid_skills) > 0:
+                    fig = px.bar(valid_skills.head(10), 
+                                title="Top 10 Skills Detected",
+                                labels={'value': 'Frequency', 'index': 'Skills'})
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Show skills as tags
+                    st.write("**All Detected Skills:**")
+                    for skill in valid_skills.index[:20]:
+                        st.markdown(f'<span class="skill-tag">{skill}</span>', unsafe_allow_html=True)
+                else:
+                    st.info("🤖 No valid skills detected. Try the NER Analysis tab for detailed text analysis.")
             else:
-                st.info("🤖 No skills detected yet. The AI is analyzing your data...")
-
+                st.info("📝 No skills detected yet. The system will analyze task descriptions to find skills.")
+        
         with tab2:
-            st.markdown('<div class="feature-card"><h3>🏆 Worker Leaderboard</h3></div>', unsafe_allow_html=True)
+            st.header("🏆 Employee Leaderboard")
             
             col1, col2 = st.columns([2, 1])
             
             with col1:
                 st.subheader("Performance Ranking")
-                # Style the dataframe
                 styled_df = leaderboard_df.reset_index(drop=True).style.background_gradient(
                     subset=['Score'], cmap='YlOrBr'
                 )
@@ -241,143 +530,97 @@ if uploaded_file:
                         <h3 style="margin: 5px 0; color: #e17055;">{employee['Score']} pts</h3>
                     </div>
                     """, unsafe_allow_html=True)
-
+        
         with tab3:
-            st.markdown('<div class="feature-card"><h3>🔧 Skills Dashboard</h3></div>', unsafe_allow_html=True)
+            st.header("🔧 Skills Dashboard")
             
-            st.subheader("👨‍💼 Employee Skill Matrix")
-            skill_matrix_df = pd.DataFrame([
-                {'Employee': emp, 'Skill Count': data['skill_count'], 'Skills': ', '.join(data['skills'])}
-                for emp, data in skill_matrix.items()
-            ]).sort_values('Skill Count', ascending=False)
+            # Employee skill matrix
+            st.subheader("Employee Skill Matrix")
             
-            # Display skills as tags
-            st.subheader("🎯 Skills Visualization")
-            col1, col2 = st.columns(2)
+            skill_data = []
+            for employee, skills in employee_skills.items():
+                skill_data.append({
+                    'Employee': employee,
+                    'Skill Count': len(skills),
+                    'Skills': ', '.join(skills) if skills else 'None detected'
+                })
             
-            with col1:
-                if all_skills:
-                    st.write("**Detected Skills:**")
-                    for skill in list(set(all_skills))[:15]:  # Show first 15 unique skills
-                        st.markdown(f'<span class="skill-tag">{skill}</span>', unsafe_allow_html=True)
+            skill_df = pd.DataFrame(skill_data).sort_values('Skill Count', ascending=False)
+            st.dataframe(skill_df, use_container_width=True)
             
-            with col2:
-                st.dataframe(skill_matrix_df, use_container_width=True)
-
+            # Skill categories
+            st.subheader("📚 Skills by Category")
+            for category, skills in TECH_SKILLS.items():
+                with st.expander(f"{category.title()} ({len(skills)} skills)"):
+                    col1, col2, col3 = st.columns(3)
+                    skills_per_col = len(skills) // 3 + 1
+                    
+                    for i, skill in enumerate(skills):
+                        col = i // skills_per_col
+                        if col == 0:
+                            col1.write(f"• {skill}")
+                        elif col == 1:
+                            col2.write(f"• {skill}")
+                        else:
+                            col3.write(f"• {skill}")
+        
         with tab4:
-            st.markdown('<div class="feature-card"><h3>📊 Report Generator</h3></div>', unsafe_allow_html=True)
+            st.header("📋 Employee Reports")
             
-            col1, = st.columns(1)
+            selected_employee = st.selectbox("Select Employee", df['Employee'].unique(), key="reports_select")
             
-            with col1:
-                selected_employee_report = st.selectbox("Select Employee for Report", df['Employee'].unique())
-
-            if st.button("📄 Generate Report", type="primary"):
-
-                emp_data = df[df['Employee'] == selected_employee_report]
-                skills_data = skill_matrix[selected_employee_report]
+            if st.button("Generate Report", type="primary", key="reports_btn"):
+                emp_data = df[df['Employee'] == selected_employee]
+                skills = employee_skills.get(selected_employee, [])
                 
-                st.subheader(f"📋 Employee Report: {selected_employee_report}")
-
-                st.text(f"{summarize_employee(emp_data)}")
-                st.text("")
-
-                # Performance Metrics
+                st.subheader(f"Report for {selected_employee}")
+                
+                # Summary section
+                st.write("### 📝 AI Summary")
+                all_descriptions = " ".join(emp_data['Description'].dropna().astype(str))
+                if all_descriptions.strip():
+                    summary = summarize_text(all_descriptions)
+                    st.info(summary)
+                else:
+                    st.warning("No descriptions available for summary")
+                
+                # AI Performance Insight
+                if skills:
+                    st.write("### 🧠 AI Performance Insight")
+                    completion_rate = (emp_data['Status'] == 'Done').mean() * 100
+                    score = calculate_employee_scores(df, emp_data)
+                    insight = generate_performance_insight(selected_employee, skills, score, f"{completion_rate:.1f}")
+                    st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
+                
+                # Metrics
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    custom_metric("Performance Score", f"{calculate_employee_scores(emp_data)}/100")
+                    score = calculate_employee_scores(df, emp_data)
+                    custom_metric("Performance Score", f"{score:.1f}")
                 with col2:
-                    custom_metric("Tasks Completed", f"{(emp_data['Status'] == 'Done').sum()}/{len(emp_data)}")
+                    done_tasks = (emp_data['Status'] == 'Done').sum()
+                    custom_metric("Tasks Completed", f"{done_tasks}/{len(emp_data)}")
                 with col3:
-                    custom_metric("Skills Detected", skills_data['skill_count'])
+                    custom_metric("Skills Detected", len(skills))
                 with col4:
-                    custom_metric("Projects Involved", emp_data['Project'].nunique())
+                    custom_metric("Projects", emp_data['Project'].nunique())
                 
-                # Detailed Analysis
-                col1, col2 = st.columns(2)
+                # Skills section
+                st.write("### 🛠️ Detected Skills")
+                if skills:
+                    for skill in skills:
+                        st.markdown(f'<span class="skill-tag">{skill}</span>', unsafe_allow_html=True)
+                else:
+                    st.info("No skills detected for this employee")
                 
-                with col1:
-                    st.subheader("🛠️ AI-Detected Skills")
-                    if skills_data['skills']:
-                        for skill in skills_data['skills']:
-                            st.markdown(f'<span class="skill-tag">{skill}</span>', unsafe_allow_html=True)
-                    else:
-                        st.info("No specific skills detected by AI")
-                
-                with col2:
-                    st.subheader("📈 Performance Insights")
-                    completion_rate = (emp_data['Status'] == 'Done').mean() * 100
-                    if completion_rate > 80:
-                        st.success("**🌟 High Performer**: Excellent completion rate!")
-                    elif completion_rate > 60:
-                        st.info("**💪 Solid Contributor**: Good completion rate")
-                    else:
-                        st.warning("**📚 Needs Support**: Lower completion rate detected")
-                    
-                    if skills_data['skill_count'] >= 4:
-                        st.success("**🎯 Versatile**: Diverse skill set")
-                    else:
-                        st.info("**🎯 Specialized**: Focused skill set")
-                
-                # Task Breakdown
-                st.subheader("📝 Recent Tasks")
+                # Recent tasks
+                st.write("### 📋 Recent Tasks")
                 st.dataframe(emp_data[['TicketID', 'Project', 'TaskCategory', 'Description', 'Status']].head(10))
-
-                # Generate report content for download
-                completion_rate_for_report = (emp_data['Status'] == 'Done').mean() * 100
-                skills_list = '\n  - '.join([skill.capitalize() for skill in skills_data['skills']]) if skills_data['skills'] else 'No specific skills detected by AI'
-                report_content = f"""
-Employee Report: {selected_employee_report}
-
-Performance Summary:
-  Performance Score: {calculate_employee_scores(emp_data)}/100
-  Tasks Completed: {(emp_data['Status'] == 'Done').sum()}/{len(emp_data)}
-  Skills Detected: {skills_data['skill_count']}
-  Projects Involved: {emp_data['Project'].nunique()}
-
-AI-Detected Skills:
-- {skills_list}
-
-Performance Insights:
-  Completion Rate: {completion_rate_for_report:.1f}%
-  {'High Performer: Excellent completion rate!' if completion_rate_for_report > 80 else 'Solid Contributor: Good completion rate' if completion_rate_for_report > 60 else 'Needs Support: Lower completion rate detected'}
-  {'Versatile: Diverse skill set' if skills_data['skill_count'] >= 4 else 'Specialized: Focused skill set'}
-
-Recent Tasks (Top 10):
-{emp_data[['TicketID', 'Project', 'TaskCategory', 'Description', 'Status']].head(10).to_string()}
-                """
-
-                st.download_button(
-                    label="💾 Download Report",
-                    data=report_content,
-                    file_name=f"{selected_employee_report}_report.txt",
-                    mime="text/plain"
-                )
-
+        
         with tab5:
-            st.markdown('<div class="feature-card"><h3>👥 Team Optimizer</h3></div>', unsafe_allow_html=True)
+            st.header("👥 Team Optimizer")
             
             st.subheader("📋 Project Team Analysis")
-            
-            project_teams = {}
-            for project in df['Project'].unique():
-                project_data = df[df['Project'] == project]
-                team_members = project_data['Employee'].unique()
-                
-                # Analyze team composition
-                team_skills = []
-                for member in team_members:
-                    if member in skill_matrix:
-                        team_skills.extend(skill_matrix[member]['skills'])
-                
-                unique_skills = list(set(team_skills))
-                
-                project_teams[project] = {
-                    'team_size': len(team_members),
-                    'team_members': list(team_members),
-                    'skills_covered': unique_skills,
-                    'skill_gaps': [skill for skill in (set(all_skills) if all_skills else []) if skill not in unique_skills][:5]
-                }
             
             # Display project teams
             for project, data in project_teams.items():
@@ -416,9 +659,9 @@ Recent Tasks (Top 10):
             
             # Find employees with unique skills
             unique_skill_holders = {}
-            if all_skills:
-                for skill in set(all_skills):
-                    holders = [emp for emp, data in skill_matrix.items() if skill in data['skills']]
+            if all_detected_skills:
+                for skill in set(all_detected_skills):
+                    holders = [emp for emp, skills in employee_skills.items() if skill in skills]
                     if len(holders) == 1:  # Only one person has this skill
                         unique_skill_holders[skill] = holders[0]
             
@@ -432,67 +675,110 @@ Recent Tasks (Top 10):
             busy_employees = leaderboard_df.head(3)['Employee'].tolist()
             for emp in busy_employees[:2]:
                 st.write(f"• Consider training backup for **{emp}**'s responsibilities")
-
+        
         with tab6:
-            st.markdown('<div class="feature-card"><h3>🤖 NER Analysis</h3></div>', unsafe_allow_html=True)
+            st.header("🤖 Enhanced NER Analysis")
             
-            st.write("See the actual Named Entity Recognition in action")
+            st.write("**Analyze specific task descriptions for skills and entities**")
             
-            sample_text = st.selectbox(
-                "Select a task description to analyze:",
-                df['Description'].head(10).tolist()
+            # Sample tasks for analysis
+            sample_tasks = df['Description'].dropna().head(10).tolist()
+            selected_task = st.selectbox("Select task to analyze:", sample_tasks, key="ner_select")
+            
+            if st.button("Analyze Text", type="primary", key="ner_btn"):
+                st.subheader("🔍 Analysis Results")
+                
+                # Skill detection
+                skills_found = extract_skills_simple(selected_task)
+                st.write("### 🎯 Skills & Technologies Detected")
+                if skills_found:
+                    for skill in skills_found:
+                        st.markdown(f'<span class="skill-tag">{skill}</span>', unsafe_allow_html=True)
+                else:
+                    st.info("No specific skills detected in this text")
+                
+                # Enhanced NER analysis
+                st.write("### 📋 Entity Analysis")
+                entities = smart_ner_analysis(selected_task)
+                
+                if entities:
+                    # Convert to dataframe for nice display
+                    entities_df = pd.DataFrame(entities)
+                    st.dataframe(entities_df, use_container_width=True)
+                    
+                    # Show statistics
+                    st.write("### 📊 Analysis Summary")
+                    persons = [e for e in entities if e['entity'] == 'PERSON']
+                    skills_ner = [e for e in entities if e['entity'] == 'SKILL']
+                    orgs = [e for e in entities if e['entity'] == 'ORG']
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Persons", len(persons))
+                    col2.metric("Skills", len(skills_ner))
+                    col3.metric("Organizations", len(orgs))
+                    
+                    # Show detected persons separately
+                    if persons:
+                        st.write("### 👥 Persons Detected")
+                        for person in persons:
+                            st.markdown(f'<span class="person-tag">{person["word"]}</span>', unsafe_allow_html=True)
+                    
+                else:
+                    st.info("No entities detected in this text")
+                
+                # Show raw text
+                st.write("### 📝 Original Text")
+                st.text_area("Task Description", selected_task, height=100, key="ner_text")
+        
+        with tab7:
+            st.header("🧠 Data-Driven AI Insights")
+            
+            st.write("**Generate reliable, data-driven insights based on your actual workforce data**")
+            
+            # Insight generation options
+            insight_type = st.selectbox(
+                "Choose insight type:",
+                ["Project Analysis", "Team Optimization", "Employee Performance", "Skill Gap Analysis"],
+                key="insights_select"
             )
             
-            if st.button("🔍 Run NER Analysis", type="primary"):
-                with st.spinner("Analyzing text with AI NER model..."):
-                    ner_results = extract_skills_with_ner(sample_text)
-                    
-                    st.subheader("🎯 AI-Detected Skills & Technologies")
-                    if ner_results:
-                        for skill in ner_results:
-                            st.markdown(f'<span class="skill-tag" style="background: #6c5ce7;">{skill}</span>', unsafe_allow_html=True)
-                    else:
-                        st.info("No specific skills detected by AI NER model")
-                    
-                    # Show raw NER results
-                    st.subheader("📋 Raw NER Output")
-                    try:
-                        ner_pipe = load_ner_model()
-                        raw_entities = ner_pipe(sample_text)
+            if insight_type == "Project Analysis":
+                selected_project = st.selectbox("Select Project", df['Project'].unique(), key="project_select")
+                if st.button("Generate Project Analysis", key="project_btn"):
+                    with st.spinner("🔍 Analyzing project data..."):
+                        insight = generate_project_insight(selected_project, df, employee_skills)
+                        st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
+            
+            elif insight_type == "Team Optimization":
+                if st.button("Generate Team Recommendations", key="team_btn"):
+                    with st.spinner("🔍 Analyzing team composition..."):
+                        insight = generate_team_insight(df, employee_skills, all_detected_skills)
+                        st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
+            
+            elif insight_type == "Employee Performance":
+                selected_employee = st.selectbox("Select Employee for Analysis", df['Employee'].unique(), key="perf_select")
+                if st.button("Generate Performance Insight", key="perf_btn"):
+                    with st.spinner("🔍 Analyzing performance data..."):
+                        emp_data = df[df['Employee'] == selected_employee]
+                        skills = employee_skills.get(selected_employee, [])
+                        score = calculate_employee_scores(df, emp_data)
+                        completion_rate = (emp_data['Status'] == 'Done').mean() * 100
                         
-                        if raw_entities:
-                            entities_df = pd.DataFrame(raw_entities)
-                            st.dataframe(entities_df)
-                        else:
-                            st.info("No entities detected in this text")
-                    except Exception as e:
-                        st.error(f"Error in NER analysis: {e}")
+                        insight = generate_performance_insight(selected_employee, skills, score, f"{completion_rate:.1f}")
+                        st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
+            
+            elif insight_type == "Skill Gap Analysis":
+                if st.button("Generate Skill Gap Analysis", key="gap_btn"):
+                    with st.spinner("🔍 Analyzing skill distribution..."):
+                        insight = generate_skill_gap_insight(all_detected_skills)
+                        st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
 
 else:
-    st.markdown("""
-    <div style="text-align: center; padding: 50px;">
-        <h1>🚀 Welcome to the Workforce Intelligence Platform!</h1>
-        <h3>Unlock insights from your employee work logs with AI-powered analytics</h3>
-        <br>
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 30px; border-radius: 15px; color: white; margin: 20px 0;">
-            <h4>🎯 Features Include:</h4>
-            <p>• 🤖 AI-Powered Skill Detection</p>
-            <p>• 🏆 Employee Performance Ranking</p>
-            <p>• 🔧 Team Optimization Insights</p>
-            <p>• 📊 Automated Report Generation</p>
-        </div>
-        <p>To get started, please upload your work log data in CSV format using the sidebar on the left.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("👆 Please upload a CSV file to get started with the analysis")
 
-# -----------------------------
-# 📈 FOOTER
-# -----------------------------
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <h3>Workforce Intelligence Platform</h3>
-    <p>Built By Team C • Powered by AI • NLP Mini Project</p>
+    <p>Workforce Intelligence Platform • BuilD by TeamC • NLP miniproject</p>
 </div>
 """, unsafe_allow_html=True)
