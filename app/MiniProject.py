@@ -127,75 +127,116 @@ def extract_skills_simple(text):
     
     return list(set(found_skills))
 
+def rule_based_ner_analysis(text):
+    """
+    Rule-based NER for extracting PERSON and ORG entities using regex patterns.
+    Falls back to this when transformer model is unavailable.
+    """
+    if not isinstance(text, str):
+        return []
+    
+    entities = []
+    text_lower = text.lower()
+    
+    # Common patterns for person names (capitalized words, typically 2-3 words)
+    # Look for patterns like "John Smith", "Alice Johnson", etc.
+    person_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b'
+    person_matches = re.finditer(person_pattern, text)
+    
+    for match in person_matches:
+        person_name = match.group(1)
+        # Filter out common false positives (days, months, project names that look like names)
+        false_positives = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+                          'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+                          'september', 'october', 'november', 'december', 'project', 'task', 'ticket']
+        if person_name.lower() not in false_positives and len(person_name.split()) <= 3:
+            entities.append({'entity': 'PERSON', 'word': person_name, 'score': 0.75})
+    
+    # Common patterns for organizations (company names, often ending with Inc, Corp, LLC, etc.)
+    org_patterns = [
+        r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*(?:\s+(?:Inc|Corp|LLC|Ltd|Company|Co|Systems|Technologies|Solutions))?)\b',
+        r'\b(Google|Microsoft|Amazon|Apple|Facebook|Meta|Twitter|LinkedIn|IBM|Oracle|Salesforce|Adobe|Intel|NVIDIA)\b'
+    ]
+    
+    for pattern in org_patterns:
+        org_matches = re.finditer(pattern, text, re.IGNORECASE)
+        for match in org_matches:
+            org_name = match.group(1)
+            # Avoid duplicates and common false positives
+            if not any(e['word'].lower() == org_name.lower() for e in entities):
+                # Filter out single common words that might match
+                if len(org_name.split()) > 1 or org_name.lower() in ['google', 'microsoft', 'amazon', 'apple', 'facebook', 'meta', 'twitter', 'linkedin', 'ibm', 'oracle', 'salesforce', 'adobe', 'intel', 'nvidia']:
+                    entities.append({'entity': 'ORG', 'word': org_name, 'score': 0.70})
+    
+    return entities
+
 def smart_ner_analysis(text):
     """
-    IMPROVED NER with better special character handling for names
+    Enhanced NER that attempts to use a Hugging Face transformer model first,
+    falls back to rule-based if not available, and integrates skill extraction.
     """
+    ner_pipeline = load_ner_model()
+    entities = []
+
+    if ner_pipeline:
+        try:
+            hf_entities = ner_pipeline(text)
+            for ent in hf_entities:
+                entity_type = ent['entity_group']
+                word = ent['word']
+                score = ent['score']
+
+                # Map HF entity types to application's types
+                if entity_type == 'PER':
+                    entities.append({'entity': 'PERSON', 'word': word, 'score': score})
+                elif entity_type == 'ORG':
+                    entities.append({'entity': 'ORG', 'word': word, 'score': score})
+                # For other entity types, we might ignore them or map them if needed
+            
+            # If HF model found some entities, combine with skills
+            if entities:
+                # Detect skills in context using the simple extractor
+                skills_in_text = extract_skills_simple(text)
+                for skill in skills_in_text:
+                    # Avoid adding skills that are already identified as PERSON/ORG by HF model
+                    if not any(e['word'].lower() == skill.lower() for e in entities if e['entity'] in ['PERSON', 'ORG']):
+                        entities.append({'entity': 'SKILL', 'word': skill, 'score': 0.90})
+                return entities
+
+        except Exception as e:
+            st.warning(f"Hugging Face NER pipeline failed: {e}. Falling back to rule-based NER.")
+            # Fallback to rule-based NER if HF pipeline fails
+            pass # Continue to rule_based_ner_analysis
+
+    # Fallback to rule-based NER if HF model not loaded or no entities found by HF model
+    # or if HF pipeline failed
+    st.info("Using rule-based NER for analysis.")
+    # Detect skills in context using the simple extractor
+    skills_in_text = extract_skills_simple(text)
+    for skill in skills_in_text:
+        entities.append({'entity': 'SKILL', 'word': skill, 'score': 0.90})
+    
+    # Add rule-based PERSON/ORG detection
+    rule_based_entities = rule_based_ner_analysis(text)
+    for ent in rule_based_entities:
+        # Only add if not already covered by skills or HF entities (if any were found)
+        if not any(e['word'].lower() == ent['word'].lower() for e in entities):
+            entities.append(ent)
+
+    return entities
+
+@st.cache_resource
+def load_ner_model():
+    """Load the Hugging Face NER model"""
     try:
-        # Simple rule-based entity detection
-        entities = []
-        
-        # IMPROVED: Detect person names with special characters
-        person_pattern = r'[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+'
-        persons = re.findall(person_pattern, text, re.UNICODE)
-        
-        for person in persons:
-            entities.append({
-                'entity': 'PERSON',
-                'word': person,
-                'score': 0.95
-            })
-        
-        # ALTERNATIVE: Also look for Title Case words that might be names
-        words = text.split()
-        for i in range(len(words) - 1):
-            # Check if two consecutive words start with capital letters
-            if (len(words[i]) > 1 and len(words[i+1]) > 1 and
-                words[i][0].isupper() and words[i+1][0].isupper() and
-                not words[i].isupper() and not words[i+1].isupper()):
-                
-                potential_name = f"{words[i]} {words[i+1]}"
-                # Don't add duplicates and check if it looks like a name (not a skill)
-                if (potential_name not in persons and 
-                    potential_name not in [e['word'] for e in entities] and
-                    not any(skill in potential_name.lower() for skill in ALL_SKILLS)):
-                    
-                    entities.append({
-                        'entity': 'PERSON',
-                        'word': potential_name,
-                        'score': 0.85
-                    })
-        
-        # Detect skills in context
-        skills_in_text = extract_skills_simple(text)
-        for skill in skills_in_text:
-            entities.append({
-                'entity': 'SKILL',
-                'word': skill,
-                'score': 0.90
-            })
-        
-        # Detect organizations (words in ALL CAPS or Title Case)
-        org_pattern = r'[A-ZÀ-Ú][a-zA-ZÀ-ú]+ [A-ZÀ-Ú][a-zA-ZÀ-ú]+'
-        orgs = re.findall(org_pattern, text, re.UNICODE)
-        for org in orgs:
-            # Don't add if it's already identified as a person
-            if org not in [e['word'] for e in entities if e['entity'] == 'PERSON']:
-                entities.append({
-                    'entity': 'ORG',
-                    'word': org,
-                    'score': 0.85
-                })
-        
-        return entities
-        
+        return pipeline("ner", model="dslim/bert-base-NER", aggregation_strategy="simple")
     except Exception as e:
-        st.error(f"Analysis error: {e}")
-        return []
+        st.error(f"Failed to load NER model: {e}. Falling back to rule-based NER.")
+        return None
 
 @st.cache_resource
 def load_summarizer():
-    """Load a fast summarization model"""
+    """Load a fast summarization model (encoder-decoder)"""
     try:
         return pipeline("summarization", 
                        model="sshleifer/distilbart-cnn-12-6",
@@ -204,7 +245,7 @@ def load_summarizer():
         return pipeline("summarization", model="facebook/bart-large-cnn")
 
 def summarize_text(text):
-    """Simple summarization that actually works"""
+    """Simple summarization using encoder-decoder model"""
     try:
         summarizer = load_summarizer()
         
@@ -220,6 +261,89 @@ def summarize_text(text):
         return summary
     except Exception as e:
         return f"Summary: {text[:200]}..."  # Fallback to truncated text
+
+@st.cache_resource
+def load_text_generator():
+    """Load the text generation model for synthetic task log generation"""
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        model_name = "Qwen/Qwen2-1.5B-Instruct"
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            torch_dtype="auto",
+            device_map="auto"
+        )
+        return {"model": model, "tokenizer": tokenizer}
+    except Exception as e:
+        st.warning(f"Failed to load text generation model: {e}. Using template-based generation.")
+        return None
+
+def generate_synthetic_task_log(employee_name, task_category, project_name, generator=None):
+    """
+    Generate a synthetic task log description using transformer model.
+    Falls back to template-based generation if model is unavailable.
+    """
+    if generator is None:
+        generator = load_text_generator()
+    
+    if generator is None:
+        # Fallback to template-based generation
+        templates = [
+            f"{employee_name} worked on {task_category} tasks for {project_name}.",
+            f"{employee_name} completed {task_category} work related to {project_name}.",
+            f"{employee_name} handled {task_category} issues in {project_name}."
+        ]
+        return np.random.choice(templates)
+    
+    try:
+        model = generator["model"]
+        tokenizer = generator["tokenizer"]
+        
+        # Create a prompt for task log generation
+        prompt = f"""Generate a realistic work task description for an employee named {employee_name} working on a {task_category} task in {project_name}. 
+The description should be professional, specific, and similar to real work logs. Keep it concise (1-2 sentences)."""
+        
+        # Format for Qwen2-Instruct
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant that generates realistic work task descriptions."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        
+        model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+        
+        # Generate
+        generated_ids = model.generate(
+            model_inputs.input_ids,
+            max_new_tokens=100,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+        
+        generated_ids = [
+            output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+        ]
+        
+        response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        return response.strip()
+        
+    except Exception as e:
+        st.warning(f"Text generation failed: {e}. Using template-based generation.")
+        # Fallback
+        templates = [
+            f"{employee_name} worked on {task_category} tasks for {project_name}.",
+            f"{employee_name} completed {task_category} work related to {project_name}.",
+            f"{employee_name} handled {task_category} issues in {project_name}."
+        ]
+        return np.random.choice(templates)
 
 def generate_data_driven_insight(insight_type, data_context):
     """
@@ -579,7 +703,8 @@ if uploaded_file:
                 st.write("### 📝 AI Summary")
                 all_descriptions = " ".join(emp_data['Description'].dropna().astype(str))
                 if all_descriptions.strip():
-                    summary = summarize_text(all_descriptions)
+                    with st.spinner("Generating summary..."):
+                        summary = summarize_text(all_descriptions)
                     st.info(summary)
                 else:
                     st.warning("No descriptions available for summary")
@@ -738,7 +863,7 @@ if uploaded_file:
             # Insight generation options
             insight_type = st.selectbox(
                 "Choose insight type:",
-                ["Project Analysis", "Team Optimization", "Employee Performance", "Skill Gap Analysis"],
+                ["Project Analysis", "Team Optimization", "Employee Performance", "Skill Gap Analysis", "Synthetic Data Generator"],
                 key="insights_select"
             )
             
@@ -772,6 +897,51 @@ if uploaded_file:
                     with st.spinner("🔍 Analyzing skill distribution..."):
                         insight = generate_skill_gap_insight(all_detected_skills)
                         st.markdown(f'<div class="ai-insight">{insight}</div>', unsafe_allow_html=True)
+            
+            elif insight_type == "Synthetic Data Generator":
+                st.subheader("🤖 Generate Synthetic Task Logs")
+                st.write("**Use AI to generate realistic task descriptions for testing and data augmentation**")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    gen_employee = st.selectbox("Employee Name", df['Employee'].unique(), key="gen_emp")
+                with col2:
+                    gen_category = st.selectbox("Task Category", df['TaskCategory'].unique(), key="gen_cat")
+                with col3:
+                    gen_project = st.selectbox("Project", df['Project'].unique(), key="gen_proj")
+                
+                num_logs = st.number_input("Number of logs to generate", min_value=1, max_value=10, value=3, key="num_logs")
+                
+                if st.button("Generate Task Logs", type="primary", key="gen_btn"):
+                    with st.spinner("🤖 Generating synthetic task logs using AI..."):
+                        generator = load_text_generator()
+                        generated_logs = []
+                        
+                        for i in range(num_logs):
+                            log = generate_synthetic_task_log(gen_employee, gen_category, gen_project, generator)
+                            generated_logs.append({
+                                'Log #': i + 1,
+                                'Description': log
+                            })
+                        
+                        st.success(f"✅ Generated {num_logs} synthetic task logs!")
+                        st.subheader("📋 Generated Task Logs")
+                        
+                        for i, log_data in enumerate(generated_logs):
+                            st.markdown(f"**Log {log_data['Log #']}:**")
+                            st.info(log_data['Description'])
+                            st.markdown("---")
+                        
+                        # Option to download as CSV
+                        logs_df = pd.DataFrame(generated_logs)
+                        csv = logs_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Generated Logs as CSV",
+                            data=csv,
+                            file_name=f"synthetic_logs_{gen_employee}_{gen_category}.csv",
+                            mime="text/csv",
+                            key="download_logs"
+                        )
 
 else:
     st.info("👆 Please upload a CSV file to get started with the analysis")
