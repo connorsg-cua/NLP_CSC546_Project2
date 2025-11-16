@@ -1,322 +1,290 @@
-# Technical Document: Workforce Intelligence Platform
-
-## 1. Introduction
-
-### Project Goal
-The primary goal of this project is to design and implement a system that effectively evaluates workers’ task contributions and summarizes their strengths, ultimately aiding in fair bonus allocation.
-
-### Key Consideration
-The project acknowledges the critical human element in work, emphasizing the importance of upholding the dignity of all individuals. The system aims to infuse equity into employer-employee relations, ensuring that a person's contributions are not reduced to mere transactional data.
-
-## 2. Technical Requirements
-
-The project adheres to the following technical specifications:
-
-*   **Transformer Models:** Utilize at least two transformer models from the Hugging Face `transformers` library.
-    *   **Status: Met.** The project utilizes three transformer models: `dslim/bert-base-NER` (for Named Entity Recognition), `sshleifer/distilbart-cnn-12-6` (for summarization), and `Qwen/Qwen2-1.5B-Instruct` (for text generation).
-*   **Pipeline Integration:** Integrate Named Entity Recognition (NER), Summarization, and Text Generation into a cohesive and functional pipeline.
-*   **Evaluation:** Evaluate the system's performance using standard NLP metrics.
-*   **Demo Application:** Provide a concise and interactive demo application or notebook, preferably using Streamlit.
-
-## 3. Current Progress
-
-### Data Sources
-
-The project utilizes both synthetic and hybrid data for development and testing.
-
-*   **Synthetic Data:**
-    *   `synthetic_work_logs.csv`: A CSV file containing synthetic work log entries.
-    *   `synthetic_work_logs.json`: A JSON representation of synthetic work log entries.
-    *   `gen_data.py`: A Python script responsible for generating synthetic data.
-*   **Hybrid Data:**
-    *   `tickets.csv`: Raw ticket data.
-    *   `tickets_final.csv`: Processed or finalized ticket data.
-    *   `assign_people.py`: A Python script likely used for assigning individuals to tasks or processing people-related data.
-    *   `data_eval.py`: A Python script for evaluating data or models.
-
-### Named Entity Recognition (NER)
-
-*   **Model Used:** `dslim/bert-base-NER` from Hugging Face, integrated into the `smart_ner_analysis` function. The system falls back to a custom rule-based NER if the transformer model fails to load or if it doesn't identify certain entities.
-*   **Functionality:** The NER component now primarily leverages the `dslim/bert-base-NER` transformer model to automatically extract key entities such as person names (`PERSON`) and organizations (`ORG`) from natural language task descriptions. For skill detection, it combines the transformer's output with the `extract_skills_simple` keyword-matching function, ensuring comprehensive skill identification. This hybrid approach aims to enhance accuracy by utilizing a pre-trained model while retaining robust skill extraction.
-
-### Summarization
-
-*   **Model Used:** `sshleifer/distilbart-cnn-12-6` from Hugging Face (with `facebook/bart-large-cnn` as a fallback).
-*   **Functionality:** The summarization component utilizes an encoder-decoder transformer model to condense lengthy work logs or task descriptions into concise summaries, highlighting key contributions and strengths of employees.
-
-### Text Generation
-
-*   **Model Used:** `Qwen/Qwen2-1.5B-Instruct` from Hugging Face (decoder-only transformer model).
-*   **Functionality:** The text generation component uses a transformer-based model to generate realistic synthetic task logs. The system can generate task descriptions given an employee name, task category, and project name. The model is instruction-tuned and generates contextually appropriate work log entries. The system falls back to template-based generation if the transformer model is unavailable. Additionally, template-based insight generation remains for structured reports (`generate_data_driven_insight`, `generate_project_insight`, `generate_team_insight`, `generate_performance_insight`, `generate_skill_gap_insight`).
-
-### Demo Application (Streamlit)
-
-A functional demo application has been developed using Streamlit, located at `app/MiniProject.py`. This application provides an interactive interface for showcasing the project's capabilities.
-
-*   **Key Features:**
-    *   **Organizational Overview:** A dashboard displaying key metrics, skill distribution, completion rates, and project statistics.
-    *   **Employee Leaderboard:** Ranks employees based on performance scores, highlighting top performers and tracking project involvement.
-    *   **Skills Dashboard:** Utilizes AI-powered skill detection (via NER) to visualize skill tags and an employee skill matrix, offering real-time skill analysis.
-    *   **Report Generator:** Generates individual employee reports detailing completion rates, task counts, strengths, and areas for improvement. Reports are downloadable in text format.
-    *   **Team Optimizer:** Assesses team skill sets, identifies missing skills for projects, and suggests improvements or cross-training opportunities.
-    *   **NER Analysis Tab:** An interactive feature allowing users to see the `dslim/bert-base-NER` model in action, view raw NER output, and test different task descriptions for entity detection.
-
-*   **AI Mechanism:** The application now primarily leverages the Hugging Face NER Model (`dslim/bert-base-NER`) for person and organization entity extraction, combined with custom rule-based methods (`extract_skills_simple`) for skill detection. This hybrid approach processes natural language in task descriptions, automatically extracting relevant entities and skills. The system includes a fallback to the rule-based NER if the transformer model is unavailable or doesn't identify entities.
-
-### Evaluation Framework
-
-*   **Status:** Fully implemented with proper metrics calculation.
-*   **Functionality:** The `evaluation_script.py` provides comprehensive evaluation functions:
-    *   **NER Evaluation:** Calculates precision, recall, and F1-score for each entity type (PERSON, ORG, SKILL) as well as overall macro-averaged metrics.
-    *   **Summarization Evaluation:** Implements ROUGE-1, ROUGE-2, and ROUGE-L metrics using the `rouge-score` library (with fallback to `datasets` library). Calculates precision, recall, and F1 for each ROUGE variant.
-    *   **Evaluation Utilities:** Includes functions to create ground truth summaries, run evaluations on datasets, and generate formatted evaluation reports.
-
-## 3.1 Architecture Overview
-
-The Workforce Intelligence Platform is structured as a modular system, primarily driven by a Streamlit web application. The architecture can be visualized as follows:
-
-```
-+---------------------+       +---------------------+       +---------------------+
-|     Data Sources    |       |   NLP Processing    |       |   Streamlit App     |
-| (CSV Work Logs, etc.)|<----->|      Pipeline       |<----->| (User Interface)    |
-+---------------------+       +---------------------+       +---------------------+
-           |                           |                               |
-           |                           |                               |
-           v                           v                               v
-+---------------------+       +---------------------+       +---------------------+
-|  Data Loading &     |       |  Named Entity       |       |  Dashboards &       |
-|  Preprocessing      |       |  Recognition (NER)  |       |  Reports            |
-| (Pandas DataFrames) |------>|  - dslim/bert-base-NER|------>|  - Organizational   |
-+---------------------+       |  - Custom Skill     |       |  Overview           |
-                               |    Extraction       |       |  - Employee         |
-                               +---------------------+       |    Leaderboard      |
-                                       |                     |  - Skills Dashboard |
-                                       v                     |  - Employee Reports |
-                               +---------------------+       |  - Team Optimizer   |
-                               |   Text              |       |  - NER Analysis Tab |
-                               |   Summarization     |       |  - AI Insights      |
-                               |  - sshleifer/distilbart-cnn-12-6|       +---------------------+
-                               |  - facebook/bart-large-cnn  |
-                               +---------------------+
-                                       |
-                                       v
-                               +---------------------+
-                               |   Insight           |
-                               |   Generation        |
-                               |  - Template-based   |
-                               +---------------------+
-                                       |
-                                       v
-                               +---------------------+
-                               |   Evaluation        |
-                               |   Framework         |
-                               | (evaluation_script.py)|
-                               +---------------------+
-```
-
-**Key Components and Data Flow:**
-
-*   **Data Sources:** Raw work log data, typically in CSV format, serves as the primary input. Synthetic data is also used for development and testing.
-*   **Data Loading & Preprocessing:** The Streamlit application loads the CSV data into Pandas DataFrames. Basic preprocessing is performed to prepare the text for NLP tasks.
-*   **NLP Processing Pipeline:**
-    *   **Named Entity Recognition (NER):** This component identifies and extracts key entities from task descriptions. It primarily uses the `dslim/bert-base-NER` Hugging Face transformer model for person and organization detection, augmented by custom rule-based logic (`extract_skills_simple`) for comprehensive skill extraction.
-    *   **Text Summarization:** The `sshleifer/distilbart-cnn-12-6` Hugging Face transformer model (with `facebook/bart-large-cnn` as a fallback) condenses lengthy task descriptions into concise summaries.
-    *   **Insight Generation:** This module uses a template-based approach to generate data-driven insights and recommendations across various aspects like project analysis, team optimization, employee performance, and skill gap analysis.
-*   **Streamlit Application (User Interface):** The core of the user interaction, presenting various dashboards and reports:
-    *   Organizational Overview
-    *   Employee Leaderboard
-    *   Skills Dashboard
-    *   Employee Reports
-    *   Team Optimizer
-    *   NER Analysis Tab (for interactive entity detection)
-    *   AI Insights (displaying generated insights)
-*   **Evaluation Framework:** A separate `evaluation_script.py` provides a conceptual framework for evaluating the NER and Summarization components. It outlines how metrics would be calculated given a ground truth dataset.
-
-The data flows from the raw input, through the NLP processing pipeline, and is then visualized and presented to the user via the Streamlit application. The evaluation framework operates independently but is designed to assess the performance of the NLP components.
-
-## 4. Model Details
-
-### 4.1 Named Entity Recognition Model
-
-**Model:** `dslim/bert-base-NER`
-- **Architecture:** BERT-base (12-layer, 768-hidden, 12-heads)
-- **Parameters:** ~110M
-- **Training:** Pre-trained on CoNLL-2003 dataset
-- **Entity Types:** PERSON (PER), ORGANIZATION (ORG), LOCATION (LOC), MISCELLANEOUS (MISC)
-- **Input Format:** Raw text strings
-- **Output Format:** List of entities with word, entity type, and confidence score
-- **Configuration:** Uses aggregation strategy "simple" to merge subword tokens
-
-### 4.2 Summarization Model
-
-**Model:** `sshleifer/distilbart-cnn-12-6`
-- **Architecture:** Distilled version of BART (6 encoder layers, 6 decoder layers)
-- **Parameters:** ~60M (distilled from BART-large)
-- **Training:** Pre-trained on CNN/DailyMail dataset
-- **Max Input Length:** 1024 tokens
-- **Max Output Length:** 100 tokens (configurable)
-- **Specialization:** News article summarization
-- **Fallback:** `facebook/bart-large-cnn` (if primary model fails to load)
-
-### 4.3 Text Generation Model
-
-**Model:** `Qwen/Qwen2-1.5B-Instruct`
-- **Architecture:** Decoder-only transformer (GPT-style)
-- **Parameters:** ~1.5B
-- **Training:** Instruction-tuned for following user prompts
-- **Max Input Length:** 2048 tokens
-- **Max Output Length:** 100 tokens (configurable)
-- **Temperature:** 0.7 (for controlled randomness)
-- **Specialization:** Task log generation via natural language instructions
-
-## 5. Training Details
-
-All models used in this project are pre-trained models from Hugging Face. No fine-tuning was performed. The models are used in their pre-trained state with the following configurations:
-
-- **NER Model:** Used with default tokenizer and aggregation strategy. No additional training data was used.
-- **Summarization Models:** Both models are used with default configurations. Input text is truncated to 1500 characters to fit within model limits.
-- **Text Generation Model:** Used with temperature=0.7 and do_sample=True for diverse but controlled generation.
-
-The system is designed to work out-of-the-box with pre-trained models, making it accessible without requiring extensive computational resources for training.
-
-## 6. Complete Metrics
-
-### 6.1 NER Evaluation Results
-
-Based on evaluation on sample data:
-
-**Overall Metrics:**
-- Precision: 0.85-0.90 (estimated based on model performance)
-- Recall: 0.80-0.85 (estimated)
-- F1-Score: 0.82-0.87 (estimated)
-
-**Per-Entity Performance:**
-- **PERSON:** High precision (~0.90) due to capitalization patterns, moderate recall (~0.85)
-- **ORG:** Good precision (~0.85), lower recall (~0.75) as some organizations may not be in training data
-- **SKILL:** Variable performance depending on skill vocabulary coverage; estimated F1 ~0.80
-
-**Note:** Exact metrics would require a fully annotated ground truth dataset. The above estimates are based on qualitative evaluation of the model outputs.
-
-### 6.2 Summarization Evaluation Results
-
-**DistilBART Model:**
-- ROUGE-1 F1: 0.35-0.40 (estimated)
-- ROUGE-2 F1: 0.15-0.20 (estimated)
-- ROUGE-L F1: 0.30-0.35 (estimated)
-
-**Note:** These metrics are estimates based on sample evaluations. Actual performance would vary based on the domain and quality of input text. The ROUGE scores are lower than typical news summarization tasks because work logs have different structure and vocabulary.
-
-## 7. Error Analysis
-
-### 7.1 NER Errors
-
-**Common Failure Cases:**
-1. **Ambiguous Names:** Common words that are also names (e.g., "Python" as a name vs. programming language) - handled by skill extraction logic
-2. **Unseen Organizations:** Organizations not in training data may be missed
-3. **Skill Detection:** Technical skills not in the predefined vocabulary are missed
-4. **Compound Entities:** Multi-word entities may be split incorrectly
-
-**Edge Cases:**
-- Very short task descriptions (< 10 words) may not contain enough context
-- Non-English text (though rare in our dataset) is not handled
-- Abbreviations and acronyms may be misclassified
-
-**Limitations:**
-- Rule-based fallback is less accurate than transformer model
-- Skill detection relies on keyword matching, missing synonyms
-- No handling of temporal entities (dates, times)
-
-### 7.2 Summarization Errors
-
-**Common Failure Cases:**
-1. **Over-summarization:** Important details may be omitted
-2. **Under-summarization:** Summary may be too long or include irrelevant information
-3. **Factual Errors:** Rare but possible, especially with decoder-only models
-4. **Domain Mismatch:** Models trained on news may not capture technical work log nuances
-
-**Edge Cases:**
-- Very short inputs (< 50 words) may produce summaries longer than input
-- Very long inputs (> 1500 words) are truncated, potentially losing information
-- Lists or bullet points may not be properly summarized
-
-**Limitations:**
-- No domain-specific fine-tuning
-- Fixed length summaries may not adapt to content complexity
-- No handling of structured data (tables, lists)
-
-### 7.3 Text Generation Errors
-
-**Common Failure Cases:**
-1. **Repetition:** Model may repeat phrases or sentences
-2. **Off-topic Generation:** May generate content not relevant to the task
-3. **Inconsistent Style:** Generated text may not match existing work log style
-4. **Hallucination:** May include details not specified in the prompt
-
-**Edge Cases:**
-- Very specific task categories may produce generic descriptions
-- Long employee names may cause formatting issues
-- Special characters in project names may affect generation
-
-**Limitations:**
-- No guarantee of factual accuracy in generated logs
-- May require post-processing to ensure quality
-- Generation time increases with model size
-
-## 8. Discussion
-
-### 8.1 System Strengths
-
-The Workforce Intelligence Platform successfully integrates three transformer models into a cohesive pipeline. The hybrid approach (transformer + rule-based) for NER provides robustness, while the encoder-decoder summarization model offers fast and factual summaries. The Streamlit interface makes the system accessible to non-technical users, and the evaluation framework enables systematic performance assessment.
-
-### 8.2 Trade-offs and Design Decisions
-
-**Model Selection:**
-- Chose lightweight models (1.5B parameters) to ensure reasonable inference speed and memory usage
-- Used pre-trained models to avoid training costs and enable quick deployment
-- Selected models with good Hugging Face support for easier integration
-
-**Architecture Choices:**
-- Hybrid NER (transformer + rules) balances accuracy and robustness
-- Single summarization model (DistilBART) provides fast, factual summaries
-- Template-based insights complement transformer generation for structured outputs
-
-### 8.3 Limitations and Future Improvements
-
-**Current Limitations:**
-1. No fine-tuning on domain-specific data
-2. Limited evaluation on real-world datasets
-3. No handling of multi-language inputs
-4. Fixed model configurations (no hyperparameter tuning)
-
-**Future Improvements:**
-1. **Fine-tuning:** Fine-tune summarization models on work log data for better domain adaptation
-2. **Active Learning:** Implement active learning to improve NER with user feedback
-3. **Multi-language Support:** Add support for non-English work logs
-4. **Real-time Evaluation:** Integrate evaluation metrics into the Streamlit app
-5. **Model Selection:** Allow users to choose models based on their specific needs
-6. **Quality Control:** Add post-processing to filter low-quality generated text
-7. **Bias Detection:** Implement bias detection and mitigation for fair evaluation
-
-### 8.4 Ethical Considerations
-
-The system is designed with ethical considerations in mind:
-- Uses synthetic data to avoid privacy concerns
-- Emphasizes human dignity in worker evaluation
-- Provides transparent metrics and explanations
-- Allows human oversight of AI-generated insights
-
-However, care must be taken to:
-- Avoid reducing workers to mere metrics
-- Ensure fairness across different employee groups
-- Provide context for AI-generated recommendations
-- Allow for human judgment in final decisions
-
-## 9. Future Work/Next Steps
-
-*   Acquire or create a fully annotated ground truth dataset with entity labels and reference summaries to enable comprehensive quantitative evaluation.
-*   Fine-tune summarization models on domain-specific work log data to improve performance.
-*   Integrate real-time evaluation metrics into the Streamlit application dashboard.
-*   Expand text generation capabilities to support more complex report generation.
-*   Implement bias detection and fairness metrics for worker evaluation.
-*   Add support for multi-language work logs and evaluations.
-*   Develop API endpoints for programmatic access to the system.
+Worker Evaluation and Profiling Tool
+Course: CSC 546- Applied NLP Systems
+Team: C
+Repository: https://github.com/connorsg-cua/NLP_CSC546_Project2
+Submission Date: November 13, 2025
+1. Problem Brief
+Motivation
+In modern organizations, analyzing employee productivity and identifying strengths or
+improvement areas are crucial for maintaining a competitive advantage. Traditional evaluation
+methods are often manual, time-consuming, and subjective, which can lead to bias and
+inconsistency.
+This project introduces an AI-powered Workforce Intelligence Platform that uses Natural
+Language Processing (NLP) to automatically analyze textual work logs. By applying Named
+Entity Recognition (NER), Summarization, and Text Generation, the system extracts skills,
+summarizes employee contributions, and generates analytical reports for managers.
+The ultimate goal is to create a data-driven, fair, and explainable performance evaluation
+system, helping organizations to:
+Identify key contributors and underperformers.
+Detecting critical skill dependencies.
+Suggest balanced team compositions and training recommendations.
+Data Sources
+The system works with a synthetic dataset (synthetic_work_logs.csv) containing structured and
+textual information about employee work logs.
+Dataset Columns:
+Column Description
+TicketID Unique identifier for each task
+Employee Employee assigned to the task
+Project Project name
+TaskCategory Task type (e.g., Testing, Design, Backend)
+
+Description Textual task description analyzed by NLP
+Week Week of task
+Status Task completion status
+ProgressPct Task progress percentage
+EstimatedHours Estimated work hours
+StartDate Task start date
+EndDate Task end date
+ManagerNote Optional manager note or comment
+
+Ethical Considerations:
+All data is synthetic, ensuring no personal or confidential information is included. This complies
+with ethical data-handling practices for AI research.
+2. System Architecture
+The application integrates three main NLP components — NER, Summarization, and (future)
+Text Generation — within an interactive Streamlit web app.
+Architecture Diagram
++-----------------+ +----------------------+ +-------------------------+
+| Data Input |-----&gt;| NER Skill Extractor |-----&gt;| Skill-based Profiling |
+| (CSV Work Logs) | | (dslim/bert-base-NER)| | (Employee Skill Matrix) |
++-----------------+ +----------------------+ +-------------------------+
+|
+v
++----------------------+ +---------------------+ +---------------------+
+| Summarization Engine |-----&gt;| Employee Summaries |-----&gt;| Performance Reports |
+| (sshleifer/distilbart-cnn-12-6)| | (Concise Profiles) | | (Manager Dashboards)|
++----------------------+ +---------------------+ +---------------------+
+|
+v
++----------------------+
+| Text Generation |
+| ( Qwen/Qwen2-1.5B-Instruct)|
++----------------------+
+
+Pipeline Stages
+Data Input:
+CSV file uploaded by the user via Streamlit sidebar (file_uploader).
+NER Skill Extractor:
+Uses dslim/bert-base-NER with aggregation_strategy=&quot;simple&quot; to detect named entities and
+filter relevant technical skills (e.g., Python, Docker, AWS).
+Skill-based Profiling:
+Constructs a Skill Matrix per employee, showing unique skills, total count, and frequency
+across projects.
+Summarization Engine:
+Uses sshleifer/distilbart-cnn-12-6 to produce concise summaries of employee contributions by
+concatenating their task descriptions.
+Employee Summaries:
+Each employee receives a summary paragraph describing main accomplishments.
+Performance Reports:
+Generates leaderboards, insights, and downloadable text reports that combine NER +
+Summarization results.
+Text Generation
+Uses Qwen/Qwen2-1.5B-Instruct to generate synthetic employee logs.
+3. Technical Documentation
+3.1 Models Integrated
+1. Named Entity Recognition (NER)
+Model: dslim/bert-base-NER
+Type: Encoder-based BERT model fine-tuned for entity classification.
+Purpose: Extract skill and technology mentions from textual task descriptions.
+Implementation Highlights:
+ner_pipe = pipeline(&quot;ner&quot;, model=&quot;dslim/bert-base-NER&quot;, aggregation_strategy=&quot;simple&quot;)
+entities = ner_pipe(text)
+Code uses the dslim/bert-base-NER to identify employees and skills in the Enhanced NER
+Analysis tab, which displays the confidence scores associated with each.
+If the pipeline fails, the code defaults to a rules-based NER model, where results are post-
+processed using a custom filtering mechanism that matches keywords (Python, Docker, Cloud,
+ML, etc.).
+Output Example:
+[&quot;python&quot;, &quot;docker&quot;, &quot;aws&quot;, &quot;sql&quot;]
+Limitations:
+
+May miss domain-specific skill names or capture irrelevant entities. Keyword filtering improves
+accuracy.
+2. Text Summarization
+Model: sshleifer/distilbart-cnn-12-6
+Type: Encoder–decoder transformer (BART architecture).
+Purpose: Generate concise summaries of employees’ overall contributions.
+Implementation:
+summarizer = pipeline(&quot;summarization&quot;, model=“sshleifer/distilbart-cnn-12-6”,
+tokenizer=“sshleifer/distilbart-cnn-12-6”)
+summary = summarizer(long_text, max_length=120, min_length=30,
+do_sample=False)[0][&#39;summary_text&#39;]
+Output Example:
+“Alice contributed to backend API development, testing automation, and database optimization
+across multiple projects.”
+Strengths: Produces coherent summaries; handles moderately long input text.
+Limitations: Generic outputs for sparse data; sensitive to verbosity of task descriptions.
+3. Text Generation
+Model: Qwen/Qwen2-1.5B-Instruct
+Purpose: Generate synthetic work log entries for:
+Data augmentation
+Simulation of team productivity scenarios
+Generative “what-if” analysis
+
+### 3.2 Model Architecture Comparison: Encoder-Decoder vs. Decoder-Only
+
+This project intentionally utilizes both an **encoder-decoder** model (`sshleifer/distilbart-cnn-12-6` for summarization) and a **decoder-only** model (`Qwen/Qwen2-1.5B-Instruct` for text generation) to align with the project requirements and leverage the distinct strengths of each architecture.
+
+**Encoder-Decoder (BART/DistilBART):**
+
+*   **Architecture:** Consists of two main parts: an encoder that processes the entire input text to create a rich contextual representation, and a decoder that generates the output sequence based on that representation.
+*   **Strengths:** This architecture excels at tasks where the output is heavily conditioned on the full input, such as summarization or translation. The encoder ensures that the generated summary is factually grounded in the source text, reducing the risk of hallucination.
+*   **Use Case in Project:** We chose DistilBART for summarization because it is crucial to produce concise summaries that accurately reflect the content of the original work logs. Its encoder-decoder structure is ideal for this "many-to-few" text transformation.
+*   **Trade-offs:** While robust for summarization, these models are less flexible for open-ended generative or instruction-following tasks.
+
+**Decoder-Only (Qwen2):**
+
+*   **Architecture:** Consists of a single transformer block that predicts the next token in a sequence based on the preceding tokens. It is autoregressive by nature.
+*   **Strengths:** This architecture is highly effective for tasks that require fluid, creative, or instruction-based text generation. Models like Qwen2 are trained to follow prompts and can generate diverse outputs, making them suitable for creative and conversational AI.
+*   **Use Case in Project:** We selected Qwen2 for generating synthetic task logs. This task requires generating new, realistic-sounding text based on a simple prompt (employee name, task category). The decoder-only structure is perfect for this kind of open-ended generation.
+*   **Trade-offs:** Without the strong grounding of an encoder, decoder-only models can be more prone to hallucinating facts if not carefully prompted. They are generally better suited for "few-to-many" text transformations (e.g., a short prompt resulting in a longer text).
+
+**Performance and Trade-off Analysis:**
+
+The selection of these two model types represents a key design decision. For **summarization**, the factual consistency offered by the encoder-decoder architecture of BART was prioritized. For **synthetic data generation**, the flexibility and instruction-following capability of the decoder-only Qwen2 model were more valuable. This division of labor allows the system to use the best architectural tool for each specific NLP task, balancing the need for factual accuracy in reporting with the need for creative generation in data augmentation.
+
+### 3.3 Code Structure
+
+Component Description
+load_ner_model() Loads NER pipeline once and caches it with
+
+ @st.cache_resource.
+
+rule_based_ner_analysis() Entity recognition that uses regex patterns to identify
+people and organizations. What code defaults to if NER
+pipeline fails.
+
+smart_ner_analysis() Entity recognition that uses dslim/bert-base-NER to identify
+
+people, organizations, and skills.
+
+calculate_employee_scores() Computes performance scores (completion, diversity,
+
+workload).
+
+summarize_text() Summarizes contributions per employee using
+
+sshleifer/distilbart-cnn-12-6 model.
+
+generate_synthetic_task_log() Creates a new description for an employee using
+prompting on the Qwen/Qwen2-1.5B-Instruct model. If
+model fails, defaults to template-based text generation.
+
+generate_data_driven_insight
+()
+
+Creates insights for the Data-Driven Insights tab using
+template approach. Four different template options; data is
+fed dependent on the search type of the user.
+
+generate_project_insight() Using generate_data_driven_insight, creates an insight on
+
+the project.
+
+generate_team_insight() Using generate_data_driven_insight, creates an insight on
+
+the team.
+
+generate_performance_insig
+ht()
+
+Using generate_data_driven_insight, creates an insight on
+the employee’s performances / skills.
+
+generate_skill_gap_insight() Using generate_data_driven_insight, creates an insight on
+the skill gaps of all employees together as a team.
+Streamlit Tabs UI components: Overview, Leaderboard, Skills, Reports,
+
+Team Optimizer, NER Analysis, AI Insights.
+
+### 3.4 Training Details
+
+All models used in this project are pre-trained models from Hugging Face. **No fine-tuning or additional training was performed.** The models are used out-of-the-box to demonstrate their zero-shot capabilities on the given tasks. This approach ensures the system is lightweight and does not require extensive computational resources for training, making it easily reproducible.
+
+4. Evaluation and Metrics
+Qualitative Evaluation
+The current app focuses on interactive qualitative analysis through:
+Human inspection of NER outputs (skills detected).
+Readability and coherence of summaries.
+Manager insight via dashboards and leaderboards.
+Quantitative Metrics
+Task Metric Description
+NER Precision / Recall / F1 Evaluate entity correctness and coverage.
+Summarization ROUGE-1, ROUGE-2,
+
+ROUGE-L
+
+Compare generated summaries to gold-
+standard texts.
+
+Text Generation BLEU, Perplexity Assess fluency and content diversity.
+
+Formal testing set creation for these metrics:
+5. Error Analysis and Discussion
+Observed Issues
+NER Misclassification: Occasional detection of irrelevant entities (e.g., organization names).
+Skill Coverage Bias: Some rare technical skills not recognized by pre-trained NER.
+Summarization Redundancy: Repetitive phrasing when logs contain similar descriptions.
+Data Sparsity: Employees with few tasks get weaker summaries and unreliable scores.
+Mitigation Strategies
+Keyword post-filtering for NER to improve precision.
+Using longer context aggregation for BART to reduce redundancy.
+Weight normalization in performance scoring to ensure fairness.
+6. Future Work and Improvements
+Model Expansion:
+Integrate a decoder-only model (e.g., Mistral-7B-Instruct-Summarize-64k or SummLlama 3.2)
+for longer and more human-like summaries.
+Text Generation Module:
+Implement generative models to create synthetic task logs and simulate team load scenarios.
+Model Fine-Tuning:
+Fine-tune NER and summarization models on a small, domain-specific dataset of annotated
+work logs to improve contextual accuracy.
+Quantitative Evaluation Pipeline:
+Develop a test suite to calculate ROUGE, Precision, and F1 automatically.
+Knowledge Graph Integration:
+Build a graph of employee–skill relationships for visual exploration.
+7. Demo App and User Interface
+
+Platform:
+Developed using Streamlit, with Plotly for visualization and Pandas/Numpy for data processing.
+Tabs Overview
+Tab Description
+Overview Displays overall statistics and skill distribution bar chart.
+Leaderboard Ranks employees by computed performance score.
+Skills Shows per-employee skill matrix with visual skill tags.
+Reports Generates individual downloadable text reports.
+Team Optimizer Analyzes project team composition, skill gaps, and staffing balance.
+NER Analysis Runs raw NER pipeline on a selected task to visualize entities.
+AI Insights User can select for “project analysis”, “team optimization”,
+“employee performance”, and “skill gap analysis” and receive the
+associated generated analysis report, or select “synthetic data
+generator” and get a set of synthetic report logs for testing.
+
+Design Highlights
+Custom CSS themes with gradient cards and skill tags.
+Dynamic metrics cards (custom_metric() function).
+AI processing spinner for UX feedback.
+Downloadable employee reports in .txt format.
+8. Conclusion
+The Workforce Intelligence Platform successfully demonstrates how applied NLP
+techniques—specifically NER, Summarization, and Generation—can extract structured insights
+from unstructured employee work logs.
+With these components, the system provides:
+Automated skill detection and employee profiling,
+Summarized performance insights for each worker,
+AI-driven dashboards for workforce optimization.
+
+9. References
+Hugging Face Transformers Library: https://huggingface.co/transformers/
+Model: dslim/bert-base-NER
+Model: sshleifer/distilbart-cnn-12-6
+Streamlit Documentation: https://docs.streamlit.io/
+Plotly Express Documentation: https://plotly.com/python/plotly-express/
+
+Status Summary
+
+Component Status
+NER Model Integration Completed
+Summarization Model Integration Completed
+Text Generation Model Completed
+Backend Integration Completed
