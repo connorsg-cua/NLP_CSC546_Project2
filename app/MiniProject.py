@@ -590,9 +590,10 @@ if uploaded_file:
             }
         
         # NOW CREATE ALL TABS 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📊 Overview", "🏆 Leaderboard", "🔧 Skills", "📋 Reports", "👥 Team Optimizer", "🤖 NER Analysis", "🧠 AI Insights"])
-        
-        with tab1:
+        st.sidebar.title("📊 Navigation")
+        page = st.sidebar.radio("Go to", ["🏠 Overview", "🏆 Leaderboard", "🔧 Skills", "📋 Reports", "👥 Team Optimizer", "🤖 NER Analysis", "🧠 AI Insights"])
+
+        if page == "🏠 Overview":
             st.header("📊 Organizational Overview")
             
             col1, col2, col3, col4 = st.columns(4)
@@ -630,7 +631,7 @@ if uploaded_file:
             else:
                 st.info("📝 No skills detected yet. The system will analyze task descriptions to find skills.")
         
-        with tab2:
+        elif page == "🏆 Leaderboard":
             st.header("🏆 Employee Leaderboard")
             
             col1, col2 = st.columns([2, 1])
@@ -655,7 +656,7 @@ if uploaded_file:
                     </div>
                     """, unsafe_allow_html=True)
         
-        with tab3:
+        elif page == "🔧 Skills":
             st.header("🔧 Skills Dashboard")
             
             # Employee skill matrix
@@ -688,7 +689,7 @@ if uploaded_file:
                         else:
                             col3.write(f"• {skill}")
         
-        with tab4:
+        elif page == "📋 Reports":
             st.header("📋 Employee Reports")
             
             selected_employee = st.selectbox("Select Employee", df['Employee'].unique(), key="reports_select")
@@ -741,8 +742,44 @@ if uploaded_file:
                 # Recent tasks
                 st.write("### 📋 Recent Tasks")
                 st.dataframe(emp_data[['TicketID', 'Project', 'TaskCategory', 'Description', 'Status']].head(10))
+
+                # Generate report content for download
+                report_content = f"""
+Employee Performance Report for {selected_employee}
+==================================================
+
+AI Summary:
+-----------
+{summary}
+
+AI Performance Insight:
+-----------------------
+{insight}
+
+Performance Metrics:
+--------------------
+Performance Score: {score:.1f}
+Tasks Completed: {done_tasks}/{len(emp_data)}
+Skills Detected: {len(skills)}
+Projects Involved: {emp_data['Project'].nunique()}
+
+Detected Skills:
+----------------
+{', '.join(skills) if skills else 'No skills detected'}
+
+Recent Tasks:
+-------------
+{emp_data[['TicketID', 'Project', 'TaskCategory', 'Description', 'Status']].head(10).to_string()}
+"""
+                st.download_button(
+                    label="📥 Download Full Report",
+                    data=report_content,
+                    file_name=f"employee_report_{selected_employee.replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    key="download_employee_report"
+                )
         
-        with tab5:
+        elif page == "👥 Team Optimizer":
             st.header("👥 Team Optimizer")
             
             st.subheader("📋 Project Team Analysis")
@@ -801,7 +838,7 @@ if uploaded_file:
             for emp in busy_employees[:2]:
                 st.write(f"• Consider training backup for **{emp}**'s responsibilities")
         
-        with tab6:
+        elif page == "🤖 NER Analysis":
             st.header("🤖 Enhanced NER Analysis")
             
             st.write("**Analyze specific task descriptions for skills and entities**")
@@ -855,7 +892,7 @@ if uploaded_file:
                 st.write("### 📝 Original Text")
                 st.text_area("Task Description", selected_task, height=100, key="ner_text")
         
-        with tab7:
+        elif page == "🧠 AI Insights":
             st.header("🧠 Data-Driven AI Insights")
             
             st.write("**Generate reliable, data-driven insights based on your actual workforce data**")
